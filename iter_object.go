@@ -3,6 +3,7 @@ package jsoniter
 import (
 	"fmt"
 	"strings"
+	"unsafe"
 )
 
 // ReadObject read one field from object.
@@ -18,12 +19,12 @@ func (iter *Iterator) ReadObject() (ret string) {
 		c = iter.nextToken()
 		if c == '"' {
 			iter.unreadByte()
-			field := iter.ReadString()
+			field := iter.readObjectFieldAsBytes()
 			c = iter.nextToken()
 			if c != ':' {
 				iter.ReportError("ReadObject", "expect : after object field, but found "+string([]byte{c}))
 			}
-			return field
+			return *(*string)(unsafe.Pointer(&field))
 		}
 		if c == '}' {
 			return "" // end of object
@@ -31,12 +32,12 @@ func (iter *Iterator) ReadObject() (ret string) {
 		iter.ReportError("ReadObject", `expect " after {, but found `+string([]byte{c}))
 		return
 	case ',':
-		field := iter.ReadString()
+		field := iter.readObjectFieldAsBytes()
 		c = iter.nextToken()
 		if c != ':' {
 			iter.ReportError("ReadObject", "expect : after object field, but found "+string([]byte{c}))
 		}
-		return field
+		return *(*string)(unsafe.Pointer(&field))
 	case '}':
 		return "" // end of object
 	default:
@@ -110,7 +111,7 @@ func calcHash(str string, caseSensitive bool) int64 {
 // ReadObjectCB read object with callback, the key is ascii only and field name not copied
 func (iter *Iterator) ReadObjectCB(callback func(*Iterator, string) bool) bool {
 	c := iter.nextToken()
-	var field string
+	var field []byte
 	if c == '{' {
 		if !iter.incrementDepth() {
 			return false
@@ -118,23 +119,23 @@ func (iter *Iterator) ReadObjectCB(callback func(*Iterator, string) bool) bool {
 		c = iter.nextToken()
 		if c == '"' {
 			iter.unreadByte()
-			field = iter.ReadString()
+			field = iter.readObjectFieldAsBytes()
 			c = iter.nextToken()
 			if c != ':' {
 				iter.ReportError("ReadObject", "expect : after object field, but found "+string([]byte{c}))
 			}
-			if !callback(iter, field) {
+			if !callback(iter, *(*string)(unsafe.Pointer(&field))) {
 				iter.decrementDepth()
 				return false
 			}
 			c = iter.nextToken()
 			for c == ',' {
-				field = iter.ReadString()
+				field = iter.readObjectFieldAsBytes()
 				c = iter.nextToken()
 				if c != ':' {
 					iter.ReportError("ReadObject", "expect : after object field, but found "+string([]byte{c}))
 				}
-				if !callback(iter, field) {
+				if !callback(iter, *(*string)(unsafe.Pointer(&field))) {
 					iter.decrementDepth()
 					return false
 				}
@@ -238,15 +239,15 @@ func (iter *Iterator) readObjectStart() bool {
 func (iter *Iterator) readObjectFieldAsBytes() (ret []byte) {
 	str := iter.ReadStringAsSlice()
 	if iter.skipWhitespacesWithoutLoadMore() {
-		if ret == nil {
-			ret = make([]byte, len(str))
-			copy(ret, str)
-		}
-		if !iter.loadMore() {
-			return
-		}
+
+		ret = make([]byte, len(str))
+		copy(ret, str)
+
+		iter.loadMore()
+		return
 	}
-	if iter.buf[iter.head] != ':' {
+	return str
+	/*if iter.buf[iter.head] != ':' {
 		iter.ReportError("readObjectFieldAsBytes", "expect : after object field, but found "+string([]byte{iter.buf[iter.head]}))
 		return
 	}
@@ -263,5 +264,5 @@ func (iter *Iterator) readObjectFieldAsBytes() (ret []byte) {
 	if ret == nil {
 		return str
 	}
-	return ret
+	return ret*/
 }

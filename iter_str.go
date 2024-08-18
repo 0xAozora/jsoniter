@@ -138,6 +138,9 @@ func (iter *Iterator) ReadStringAsSlice() (ret []byte) {
 			copied = append(copied, c)
 		}
 		return copied
+	} else if c == 'n' {
+		iter.skipThreeBytes('u', 'l', 'l')
+		return []byte{}
 	}
 	iter.ReportError("ReadStringAsSlice", `expects " or n, but found `+string([]byte{c}))
 	return

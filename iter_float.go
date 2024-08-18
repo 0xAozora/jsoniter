@@ -66,7 +66,7 @@ func (iter *Iterator) ReadBigInt() (ret *big.Int) {
 	return ret
 }
 
-//ReadFloat32 read float32
+// ReadFloat32 read float32
 func (iter *Iterator) ReadFloat32() (ret float32) {
 	c := iter.nextToken()
 	if c == '-' {
@@ -156,22 +156,27 @@ non_decimal_loop:
 	return iter.readFloat32SlowPath()
 }
 
+// Use underlying buffer
 func (iter *Iterator) readNumberAsString() (ret string) {
-	strBuf := [16]byte{}
-	str := strBuf[0:0]
+	var str []byte
 load_loop:
 	for {
 		for i := iter.head; i < iter.tail; i++ {
 			c := iter.buf[i]
 			switch c {
 			case '+', '-', '.', 'e', 'E', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-				str = append(str, c)
 				continue
-			default:
-				iter.head = i
-				break load_loop
 			}
+			if len(str) != 0 {
+				str = append(str, iter.buf[iter.head:i]...)
+				iter.head = i
+				return *(*string)(unsafe.Pointer(&str))
+			}
+			str = iter.buf[iter.head:i]
+			iter.head = i
+			break load_loop
 		}
+		str = append(str, iter.buf[iter.head:iter.tail]...)
 		if !iter.loadMore() {
 			break
 		}
