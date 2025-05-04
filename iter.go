@@ -263,7 +263,11 @@ func (iter *Iterator) loadMore() bool {
 		iter.captureStartedAt = 0
 	}
 	for {
-		n, err := iter.reader.Read(iter.buf)
+		var start int
+		if iter.tail < len(iter.buf) {
+			start = iter.tail
+		}
+		n, err := iter.reader.Read(iter.buf[start:])
 		if n == 0 {
 			if err != nil {
 				if iter.Error == nil {
@@ -272,8 +276,8 @@ func (iter *Iterator) loadMore() bool {
 				return false
 			}
 		} else {
-			iter.head = 0
-			iter.tail = n
+			iter.head = start
+			iter.tail = start + n
 			return true
 		}
 	}
