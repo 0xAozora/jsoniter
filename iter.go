@@ -263,7 +263,11 @@ func (iter *Iterator) loadMore() bool {
 		iter.captureStartedAt = 0
 	}
 	for {
-		n, err := iter.reader.Read(iter.buf)
+		var start int
+		if iter.tail < len(iter.buf) {
+			start = iter.tail
+		}
+		n, err := iter.reader.Read(iter.buf[start:])
 		if n == 0 {
 			if err != nil {
 				if iter.Error == nil {
@@ -272,8 +276,8 @@ func (iter *Iterator) loadMore() bool {
 				return false
 			}
 		} else {
-			iter.head = 0
-			iter.tail = n
+			iter.head = start
+			iter.tail = start + n
 			return true
 		}
 	}
@@ -324,6 +328,16 @@ func (iter *Iterator) Read() interface{} {
 	default:
 		iter.ReportError("Read", fmt.Sprintf("unexpected value type: %v", valueType))
 		return nil
+	}
+}
+
+// Shifts the unread bytes at the beginning of the buffer if less than n.
+// Useful in combination with ReadStringAsSlice, to ensure the buffers can be used for the whole parsing of an object with max size n
+func (iter *Iterator) Shift(n int) {
+	if l := len(iter.buf) - iter.head; l < n {
+		copy(iter.buf, iter.buf[iter.head:])
+		iter.tail -= iter.head
+		iter.head = 0
 	}
 }
 
