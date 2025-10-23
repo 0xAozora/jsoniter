@@ -116,28 +116,55 @@ func (iter *Iterator) readEscapedChar(c byte, str []byte) []byte {
 func (iter *Iterator) ReadStringAsSlice() (ret []byte) {
 	c := iter.nextToken()
 	if c == '"' {
+
+		var offset int
+		var copied []byte
+
+	start:
 		for i := iter.head; i < iter.tail; i++ {
 			// require ascii string and no escape
 			// for: field name, base64, number
-			if iter.buf[i] == '"' {
+			if iter.buf[i] == '"' &&
+				(i != 0 && iter.buf[i-1] != '\\' || i == 0 && (len(copied) == 0 || copied[len(copied)-1] != '\\')) {
+
 				// fast path: reuse the underlying buffer
-				ret = iter.buf[iter.head:i]
+				ret = iter.buf[iter.head-offset : i]
 				iter.head = i + 1
+
+				if len(copied) != 0 {
+					return append(copied, ret...)
+				}
+
 				return ret
 			}
 		}
-		readLen := iter.tail - iter.head
-		copied := make([]byte, readLen, readLen*2)
-		copy(copied, iter.buf[iter.head:iter.tail])
-		iter.head = iter.tail
-		for iter.Error == nil {
-			c := iter.readByte()
-			if c == '"' {
-				return copied
+
+		// Check if the buffer is too small to hold the string itself
+		if iter.head-offset == 0 {
+			if iter.tail < len(iter.buf) {
+				offset = iter.tail
+			} else {
+				copied = append(copied, iter.buf[:iter.tail]...)
+				offset = 0
 			}
-			copied = append(copied, c)
+
+			if !iter.loadMore() {
+				iter.ReportError("ReadStringAsSlice", "unexpected EOF")
+				return nil
+			}
+
+			goto start
 		}
-		return copied
+
+		// Shift the string at the beginning of the buffer
+		offset = iter.tail - iter.head
+		copy(iter.buf, iter.buf[iter.head:iter.tail])
+		iter.tail = offset
+		if !iter.loadMore() {
+			iter.ReportError("ReadStringAsSlice", "unexpected EOF")
+			return nil
+		}
+		goto start
 	} else if c == 'n' {
 		iter.skipThreeBytes('u', 'l', 'l')
 		return []byte{}
