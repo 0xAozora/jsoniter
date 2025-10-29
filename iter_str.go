@@ -156,15 +156,19 @@ func (iter *Iterator) ReadStringAsSlice() (ret []byte) {
 			goto start
 		}
 
-		// Shift the string at the beginning of the buffer
-		offset = iter.tail - iter.head
-		copy(iter.buf, iter.buf[iter.head:iter.tail])
-		iter.tail = offset
+		// How much we already read
+		offset = offset + (iter.tail - iter.head)
+
+		// Shift the string at the beginning of the buffer if it's full
+		if iter.tail == len(iter.buf) {
+			copy(iter.buf, iter.buf[iter.tail-offset:iter.tail])
+			iter.tail = offset
+		}
+
 		if !iter.loadMore() {
 			iter.ReportError("ReadStringAsSlice", "unexpected EOF")
 			return nil
 		}
-		goto start
 	} else if c == 'n' {
 		iter.skipThreeBytes('u', 'l', 'l')
 		return []byte{}
