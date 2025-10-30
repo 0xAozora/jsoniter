@@ -169,6 +169,8 @@ func (iter *Iterator) ReadStringAsSlice() (ret []byte) {
 			iter.ReportError("ReadStringAsSlice", "unexpected EOF")
 			return nil
 		}
+
+		goto start
 	} else if c == 'n' {
 		iter.skipThreeBytes('u', 'l', 'l')
 		return []byte{}
